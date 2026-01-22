@@ -29,6 +29,7 @@
     "cheerio": "1.1.2",
     "dotenv": "^17.2.3",
     "got": "14.6.6",
+    "image-to-ascii": "^3.3.0",
     "zod": "4.3.5"
   },
   "devDependencies": {

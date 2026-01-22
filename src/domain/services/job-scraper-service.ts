@@ -2,6 +2,7 @@ import got from 'got';
 import * as cheerio from 'cheerio';
 import type { Cheerio, CheerioAPI } from 'cheerio';
 import { JobPosting, type JobDetailSection } from '../models/job-posting.js';
+import { convertImageUrlToAscii } from '../../helpers/image-ascii.js';
 
 export const DEFAULT_LIST_URL = 'https://www.getonbrd.cl/jobs/programacion';
 
@@ -62,6 +63,8 @@ const extractModality = (locationText?: string): { location?: string; modality?:
 const headingTags = new Set(['h2', 'h3', 'h4']);
 
 export class JobScraperService {
+  private companySiteCache = new Map<string, Promise<string | undefined>>();
+
   parseFromHtml(html: string, { origin = new URL(DEFAULT_LIST_URL).origin, limit, sourceUrl = DEFAULT_LIST_URL }: ParseJobsOptions = {}): JobPosting[] {
     const $: CheerioAPI = cheerio.load(html);
     const jobs: JobPosting[] = [];
@@ -177,9 +180,15 @@ export class JobScraperService {
     const details = this.parseJobDetailHtml(html, job.link);
     if (!details) return job;
 
+    const companySite = await this.resolveCompanySite(details.companyProfileUrl);
+    const logoForAscii = details.companyLogoFull ?? job.companyLogoFull ?? job.companyLogo;
+    const companyLogoAscii = logoForAscii ? await convertImageUrlToAscii(logoForAscii, { width: 36 }) : undefined;
+
     return JobPosting.create({
       ...job.toPlainObject(),
-      ...details
+      ...details,
+      companySite: companySite ?? job.companySite,
+      companyLogoAscii: companyLogoAscii ?? job.companyLogoAscii
     });
   }
 
@@ -193,12 +202,17 @@ export class JobScraperService {
     const detailSections = this.extractDetailSections($, jobBody);
     const applyAnchor = $('#apply_bottom, a.js-go-to-apply').first();
     const applyUrl = toAbsoluteUrl(applyAnchor.attr('href'), new URL(jobUrl).origin);
+    const companyLogoFull = $('span[itemprop="logo"]').first().text()?.trim() || undefined;
+    const companyProfileAnchor = $('.gb-company-logo a').first();
+    const companyProfileUrl = toAbsoluteUrl(companyProfileAnchor.attr('href'), new URL(jobUrl).origin);
 
     return {
       detailHtml,
       detailText,
       detailSections,
-      applyUrl
+      applyUrl,
+      companyLogoFull,
+      companyProfileUrl
     };
   }
 
@@ -224,5 +238,32 @@ export class JobScraperService {
     });
 
     return sections.length ? sections : undefined;
+  }
+
+  private async resolveCompanySite(profileUrl?: string): Promise<string | undefined> {
+    if (!profileUrl) return undefined;
+    if (!this.companySiteCache.has(profileUrl)) {
+      this.companySiteCache.set(profileUrl, this.fetchCompanySite(profileUrl));
+    }
+    return this.companySiteCache.get(profileUrl);
+  }
+
+  private async fetchCompanySite(profileUrl: string): Promise<string | undefined> {
+    try {
+      const html = await got(profileUrl, { headers: DEFAULT_HEADERS }).text();
+      const $ = cheerio.load(html);
+      const websiteLink = $('a[href*="/website/"]').filter((_, el) => normalizeText($(el).text()).toLowerCase().includes('website')).first();
+      if (!websiteLink.length) return undefined;
+      const redirectUrl = toAbsoluteUrl(websiteLink.attr('href'), new URL(profileUrl).origin);
+      if (!redirectUrl) return undefined;
+      try {
+        const response = await got(redirectUrl, { headers: DEFAULT_HEADERS, followRedirect: true });
+        return response.url || redirectUrl;
+      } catch {
+        return redirectUrl;
+      }
+    } catch {
+      return undefined;
+    }
   }
 }

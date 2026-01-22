@@ -21,6 +21,10 @@ export const JobSchema = z.object({
   color: z.string().optional(),
   description: z.string().optional(),
   companyLogo: z.string().url().optional(),
+  companyLogoFull: z.string().url().optional(),
+  companyProfileUrl: z.string().url().optional(),
+  companySite: z.string().url().optional(),
+  companyLogoAscii: z.string().optional(),
   source: z.string().url(),
   scrapedAt: z.string(),
   applyUrl: z.string().url().optional(),
@@ -98,6 +102,22 @@ export class JobPosting {
 
   get companyLogo() {
     return this.props.companyLogo;
+  }
+
+  get companyLogoFull() {
+    return this.props.companyLogoFull;
+  }
+
+  get companyProfileUrl() {
+    return this.props.companyProfileUrl;
+  }
+
+  get companySite() {
+    return this.props.companySite;
+  }
+
+  get companyLogoAscii() {
+    return this.props.companyLogoAscii;
   }
 
   get source() {
