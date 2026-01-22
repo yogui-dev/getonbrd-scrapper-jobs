@@ -40,6 +40,7 @@ Opciones disponibles:
 | `--format` | `json` (default) o `table` para una vista tabular resumida. |
 | `--output`, `-o` | Guarda el resultado JSON en disco. |
 | `--txt-dir` | Carpeta destino para generar un `.txt` por cada empleo. |
+| `--with-details` | Descarga cada oferta individual, extrae secciones completas, links y genera arte ASCII del logo. |
 | `--quiet` | Suprime la salida en consola (requiere `--output`). |
 | `--help`, `-h` | Muestra la ayuda integrada. |
 
@@ -75,26 +76,35 @@ Exportar cada oferta a un archivo `.txt` dentro de la carpeta `exports/txt`:
 pnpm run scrape -- --limit 10 --txt-dir exports/txt
 ```
 
+Incluir los detalles completos (descripciones largas, secciones, sitio web y logo en ASCII) y exportarlos como `.txt`:
+
+```bash
+pnpm run scrape -- --limit 5 --with-details --txt-dir exports/txt
+```
+
 ## Uso programático
 
 ```js
-import { scrapeProgrammingJobs, parseJobsFromHtml } from './src/scraper.js';
+import { JobController } from './src/domain/controllers/job-controller.js';
 
-const { jobs } = await scrapeProgrammingJobs({ limit: 5 });
+const controller = new JobController();
+const { jobs } = await controller.scrapePlain({ limit: 5, withDetails: true });
 console.log(jobs.map(({ title, company }) => `${title} @ ${company}`));
 ```
 
-Para parsear un HTML previamente descargado:
+Para parsear un HTML previamente descargado (por ejemplo `sample.html`):
 
 ```js
 import fs from 'node:fs/promises';
-import { parseJobsFromHtml } from './src/scraper.js';
+import { JobController } from './src/domain/controllers/job-controller.js';
 
+const controller = new JobController();
 const html = await fs.readFile('sample.html', 'utf8');
-const jobs = parseJobsFromHtml(html, {
+const jobs = await controller.parseOfflinePlain(html, {
   origin: 'https://www.getonbrd.cl',
   sourceUrl: 'https://www.getonbrd.cl/jobs/programacion',
-  limit: 10
+  limit: 10,
+  withDetails: true
 });
 ```
 
@@ -103,22 +113,37 @@ Cada job validado incluye:
 - `id`, `title`, `company`
 - `jobType`, `location`, `modality`, `remote`
 - `publishedAt`, `salary`, `badges`, `perks`
-- `link`, `color`, `description`, `companyLogo`
+- `link`, `color`, `description`
+- `companyLogo`, `companyLogoFull`, `companyProfileUrl`, `companySite`, `companyLogoAscii`
+- `applyUrl`, `detailHtml`, `detailText`, `detailSections`
 - `source`, `scrapedAt`
 
 ## Estructura del proyecto
 
 ```
-├── sample.html            # HTML real para pruebas offline
+├── sample.html                    # HTML real para pruebas offline
 ├── src
-│   ├── helpers/           # Espacio para utilidades compartidas (e.g. formateadores, conectores)
-│   ├── scraper.ts         # Lógica de parsing + requests HTTP (got + cheerio + zod)
-│   └── index.ts           # CLI que orquesta argumentos, TXT export y futuros conectores
+│   ├── domain/
+│   │   ├── models/        # Tipos de dominio (JobPosting, etc.)
+│   │   ├── services/      # Scraper principal y servicios auxiliares
+│   │   └── controllers/   # Coordinadores para CLI / usos programáticos
+│   ├── helpers/           # Utilidades (p. ej. conversión de imagen -> ASCII)
+│   └── index.ts           # CLI que orquesta scraping, TXT export y futuras integraciones
+├── exports/               # Salida opcional de `.txt` (añade al .gitignore)
 ├── dist/                  # Salida compilada (se genera con pnpm build)
 ├── tsconfig.json
 ├── README.md
+├── TODO.md
 └── tags.json
 ```
+
+## Enriquecimiento con `--with-details`
+
+- Activa requests adicionales (una por oferta) para obtener la página completa del trabajo.
+- Extrae secciones (Funciones, Requisitos, Beneficios, etc.), link de postulación y perfil de la empresa.
+- Resuelve el sitio web externo de la empresa y descarga el logo en alta resolución.
+- Convierte el logo en arte ASCII (usando [`image-to-ascii`](https://www.npmjs.com/package/image-to-ascii)) y lo incluye en cada `.txt` generado.
+- **Tip:** Usa un `--limit` pequeño para pruebas y evita abusar del sitio. Mantener `exports/` en `.gitignore` si no quieres versionar los `.txt`.
 
 ## Buenas prácticas de scraping
 
