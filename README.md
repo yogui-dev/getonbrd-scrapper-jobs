@@ -1,6 +1,6 @@
 # GetOnBrd Scrapper Jobs
 
-Scraper y CLI en Node.js + pnpm para obtener el listado de empleos de programación publicado en [Get on Board](https://www.getonbrd.cl/jobs/programacion). Expone tanto comandos listos para usar como funciones reutilizables en otros proyectos.
+Scraper y CLI escritos en **TypeScript** (ejecutados con `tsx`/`tsc`) para obtener el listado de empleos de programación publicado en [Get on Board](https://www.getonbrd.cl/jobs/programacion). Expone tanto comandos listos para usar como funciones reutilizables en otros proyectos.
 
 ## Requisitos
 
@@ -12,6 +12,15 @@ Instala las dependencias con:
 ```bash
 pnpm install
 ```
+
+### Scripts disponibles
+
+| Script | Descripción |
+| --- | --- |
+| `pnpm dev` | Ejecuta el CLI en modo watch con `tsx`, ideal para desarrollo. |
+| `pnpm scrape` | Lanza una corrida puntual del scraper (`tsx src/index.ts`). |
+| `pnpm build` | Compila a JavaScript en `dist/` usando `tsc`. |
+| `pnpm start` | Alias que actualmente delega en `pnpm scrape`. |
 
 ## Uso rápido del CLI
 
@@ -100,10 +109,13 @@ Cada job validado incluye:
 ## Estructura del proyecto
 
 ```
-├── sample.html       # HTML real para pruebas offline
+├── sample.html            # HTML real para pruebas offline
 ├── src
-│   ├── scraper.js    # Lógica de parsing + requests HTTP (got + cheerio + zod)
-│   └── index.js      # CLI que orquesta argumentos y salidas
+│   ├── helpers/           # Espacio para utilidades compartidas (e.g. formateadores, conectores)
+│   ├── scraper.ts         # Lógica de parsing + requests HTTP (got + cheerio + zod)
+│   └── index.ts           # CLI que orquesta argumentos, TXT export y futuros conectores
+├── dist/                  # Salida compilada (se genera con pnpm build)
+├── tsconfig.json
 ├── README.md
 └── tags.json
 ```

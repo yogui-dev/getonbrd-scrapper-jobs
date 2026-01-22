@@ -3,7 +3,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-import { DEFAULT_LIST_URL, parseJobsFromHtml, scrapeProgrammingJobs } from './scraper.js';
+import { JobController } from './domain/controllers/job-controller.js';
+import { DEFAULT_LIST_URL } from './domain/services/job-scraper-service.js';
+import type { JobProps } from './domain/models/job-posting.js';
+
+const controller = new JobController();
 
 const DEFAULT_ORIGIN = new URL(DEFAULT_LIST_URL).origin;
 
@@ -26,10 +30,25 @@ Opciones:
   --help, -h            Muestra esta ayuda
 `;
 
-const parseArgs = (argv) => {
-  const args = { page: 1, format: 'json', quiet: false };
+type OutputFormat = 'json' | 'table';
 
-  const nextValue = (token, index) => {
+interface CliArgs {
+  help?: boolean;
+  page: number;
+  limit?: number;
+  url?: string;
+  file?: string;
+  origin?: string;
+  format: OutputFormat;
+  output?: string;
+  txtDir?: string;
+  quiet: boolean;
+}
+
+const parseArgs = (argv: string[]): CliArgs => {
+  const args: CliArgs = { page: 1, format: 'json', quiet: false };
+
+  const nextValue = (token: string, index: number): string => {
     if (token.includes('=')) {
       return token.split('=').slice(1).join('=');
     }
@@ -90,7 +109,7 @@ const parseArgs = (argv) => {
         break;
       }
       case '--format': {
-        const value = nextValue(token, i);
+        const value = nextValue(token, i) as OutputFormat;
         args.format = value;
         if (!token.includes('=')) i += 1;
         break;
@@ -129,7 +148,14 @@ const parseArgs = (argv) => {
   return args;
 };
 
-const formatResult = (result, format = 'json') => {
+interface CliResult {
+  source: string;
+  page: number;
+  total: number;
+  jobs: JobProps[];
+}
+
+const formatResult = (result: CliResult, format: OutputFormat = 'json') => {
   if (format === 'table') {
     const table = result.jobs.map((job) => ({
       id: job.id,
@@ -153,7 +179,7 @@ const formatResult = (result, format = 'json') => {
   console.log(JSON.stringify(result, null, 2));
 };
 
-const writeOutput = async (filepath, result) => {
+const writeOutput = async (filepath: string | undefined, result: CliResult) => {
   if (!filepath) return;
   const target = path.resolve(process.cwd(), filepath);
   const data = JSON.stringify(result, null, 2);
@@ -162,7 +188,7 @@ const writeOutput = async (filepath, result) => {
   console.info(`✔️  Resultado guardado en ${target}`);
 };
 
-const sanitizeFilename = (value) =>
+const sanitizeFilename = (value: string): string =>
   value
     .normalize('NFKD')
     .replace(/[^a-zA-Z0-9-_]/g, '-')
@@ -170,7 +196,7 @@ const sanitizeFilename = (value) =>
     .replace(/^-|-$/g, '')
     .toLowerCase();
 
-const formatJobAsText = (job) => {
+const formatJobAsText = (job: JobProps): string => {
   const parts = [
     `Título: ${job.title}`,
     `Empresa: ${job.company ?? 'N/D'}`,
@@ -189,7 +215,7 @@ const formatJobAsText = (job) => {
   return `${parts.join('\n')}\n`;
 };
 
-const writeTxtFiles = async (dir, jobs) => {
+const writeTxtFiles = async (dir: string | undefined, jobs: JobProps[]) => {
   if (!dir || !jobs?.length) return;
   const targetDir = path.resolve(process.cwd(), dir);
   await fs.mkdir(targetDir, { recursive: true });
@@ -213,15 +239,15 @@ async function run() {
       return;
     }
 
-    let result;
+    let result: CliResult;
     if (args.file) {
       const html = await fs.readFile(path.resolve(process.cwd(), args.file), 'utf8');
       const origin = args.origin || DEFAULT_ORIGIN;
       const sourceUrl = args.url || DEFAULT_LIST_URL;
-      const jobs = parseJobsFromHtml(html, { origin, limit: args.limit, sourceUrl });
+      const jobs = controller.parseOfflinePlain(html, { origin, limit: args.limit, sourceUrl });
       result = { source: sourceUrl, page: args.page ?? 1, total: jobs.length, jobs };
     } else {
-      result = await scrapeProgrammingJobs({ baseUrl: args.url || DEFAULT_LIST_URL, page: args.page, limit: args.limit });
+      result = await controller.scrapePlain({ baseUrl: args.url || DEFAULT_LIST_URL, page: args.page, limit: args.limit });
     }
 
     await writeOutput(args.output, result);
@@ -230,7 +256,8 @@ async function run() {
       formatResult(result, args.format);
     }
   } catch (error) {
-    console.error(`❌  ${error.message}`);
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+    console.error(`❌  ${message}`);
     process.exitCode = 1;
   }
 }

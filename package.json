@@ -1,12 +1,14 @@
 {
   "name": "getonbrd-scrapper-jobs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI y librería para scrappear empleos del listado de programación en Get on Board.",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "pnpm run scrape",
-    "scrape": "node src/index.js"
+    "dev": "tsx watch src/index.ts",
+    "scrape": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "pnpm run scrape"
   },
   "keywords": [
     "scraper",
@@ -25,7 +27,13 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.91.0",
     "cheerio": "1.1.2",
+    "dotenv": "^17.2.3",
     "got": "14.6.6",
     "zod": "4.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }
