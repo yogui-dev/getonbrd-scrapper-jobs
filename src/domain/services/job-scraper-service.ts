@@ -205,6 +205,7 @@ export class JobScraperService {
     const companyLogoFull = $('span[itemprop="logo"]').first().text()?.trim() || undefined;
     const companyProfileAnchor = $('.gb-company-logo a').first();
     const companyProfileUrl = toAbsoluteUrl(companyProfileAnchor.attr('href'), new URL(jobUrl).origin);
+    const benefitsDetailed = this.extractBenefits($);
 
     return {
       detailHtml,
@@ -212,7 +213,8 @@ export class JobScraperService {
       detailSections,
       applyUrl,
       companyLogoFull,
-      companyProfileUrl
+      companyProfileUrl,
+      benefitsDetailed
     };
   }
 
@@ -238,6 +240,29 @@ export class JobScraperService {
     });
 
     return sections.length ? sections : undefined;
+  }
+
+  private extractBenefits($: CheerioAPI) {
+    const items = $('.gb-fluid-boxes__item');
+    if (!items.length) return undefined;
+
+    const benefits = items
+      .map((_, el) => {
+        const container = $(el);
+        const title = normalizeText(container.find('strong').first().text());
+        if (!title) return undefined;
+        const description = normalizeText(container.find('span').first().text()) || undefined;
+        const iconClass = container.find('i').attr('class') || '';
+        const icon = iconClass
+          .split(/\s+/)
+          .find((cls) => cls.startsWith('perk-'));
+
+        return { title, description, icon };
+      })
+      .get()
+      .filter(Boolean);
+
+    return benefits.length ? benefits : undefined;
   }
 
   private async resolveCompanySite(profileUrl?: string): Promise<string | undefined> {

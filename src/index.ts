@@ -230,6 +230,16 @@ const formatJobAsText = (job: JobProps): string => {
     });
   }
 
+  if (job.benefitsDetailed?.length) {
+    parts.push('Beneficios detallados:');
+    job.benefitsDetailed.forEach((benefit) => {
+      const extra = [benefit.description, benefit.icon ? `(icon: ${benefit.icon})` : undefined]
+        .filter(Boolean)
+        .join(' ');
+      parts.push(`- ${benefit.title}${extra ? ` - ${extra}` : ''}`);
+    });
+  }
+
   return `${parts.join('\n')}\n`;
 };
 

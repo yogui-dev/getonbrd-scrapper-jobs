@@ -5,6 +5,12 @@ const JobDetailSectionSchema = z.object({
   content: z.string()
 });
 
+const JobBenefitSchema = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  icon: z.string().optional()
+});
+
 export const JobSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -30,11 +36,13 @@ export const JobSchema = z.object({
   applyUrl: z.string().url().optional(),
   detailHtml: z.string().optional(),
   detailText: z.string().optional(),
-  detailSections: z.array(JobDetailSectionSchema).optional()
+  detailSections: z.array(JobDetailSectionSchema).optional(),
+  benefitsDetailed: z.array(JobBenefitSchema).optional()
 });
 
 export type JobProps = z.infer<typeof JobSchema>;
 export type JobDetailSection = z.infer<typeof JobDetailSectionSchema>;
+export type JobBenefit = z.infer<typeof JobBenefitSchema>;
 
 export class JobPosting {
   private constructor(private readonly props: JobProps) {}
@@ -142,6 +150,10 @@ export class JobPosting {
 
   get detailSections() {
     return this.props.detailSections ? [...this.props.detailSections] : undefined;
+  }
+
+  get benefitsDetailed() {
+    return this.props.benefitsDetailed ? [...this.props.benefitsDetailed] : undefined;
   }
 
   toPlainObject(): JobProps {
