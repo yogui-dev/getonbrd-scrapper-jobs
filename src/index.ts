@@ -26,6 +26,7 @@ Opciones:
   --format <json|table> Formato de salida (default: json)
   --output, -o <ruta>   Guarda el resultado JSON en disco
   --txt-dir <ruta>      Carpeta destino para generar un .txt por empleo
+  --with-details        Descarga cada oferta y obtiene la descripción completa (más requests)
   --quiet               Oculta salida en consola (solo válido con --output)
   --help, -h            Muestra esta ayuda
 `;
@@ -42,6 +43,7 @@ interface CliArgs {
   format: OutputFormat;
   output?: string;
   txtDir?: string;
+  withDetails?: boolean;
   quiet: boolean;
 }
 
@@ -120,6 +122,9 @@ const parseArgs = (argv: string[]): CliArgs => {
         if (!token.includes('=')) i += 1;
         break;
       }
+      case '--with-details':
+        args.withDetails = true;
+        break;
       case '--output':
       case '-o': {
         const value = nextValue(token, i);
@@ -197,7 +202,7 @@ const sanitizeFilename = (value: string): string =>
     .toLowerCase();
 
 const formatJobAsText = (job: JobProps): string => {
-  const parts = [
+  const parts: string[] = [
     `Título: ${job.title}`,
     `Empresa: ${job.company ?? 'N/D'}`,
     `Tipo: ${job.jobType ?? 'N/D'}`,
@@ -209,8 +214,17 @@ const formatJobAsText = (job: JobProps): string => {
     `Badges: ${job.badges.length ? job.badges.join(', ') : 'N/A'}`,
     `Beneficios: ${job.perks.length ? job.perks.join(', ') : 'N/A'}`,
     `Link: ${job.link}`,
-    `Descripción: ${job.description ?? 'N/D'}`
+    `Descripción: ${job.description ?? 'N/D'}`,
+    `Detalle: ${job.detailText ?? 'N/D'}`,
+    `Postulación: ${job.applyUrl ?? 'N/D'}`,
   ];
+
+  if (job.detailSections?.length) {
+    parts.push('Secciones:');
+    job.detailSections.forEach((section) => {
+      parts.push(`- ${section.title}: ${section.content}`);
+    });
+  }
 
   return `${parts.join('\n')}\n`;
 };
@@ -244,10 +258,10 @@ async function run() {
       const html = await fs.readFile(path.resolve(process.cwd(), args.file), 'utf8');
       const origin = args.origin || DEFAULT_ORIGIN;
       const sourceUrl = args.url || DEFAULT_LIST_URL;
-      const jobs = controller.parseOfflinePlain(html, { origin, limit: args.limit, sourceUrl });
+      const jobs = await controller.parseOfflinePlain(html, { origin, limit: args.limit, sourceUrl, withDetails: args.withDetails });
       result = { source: sourceUrl, page: args.page ?? 1, total: jobs.length, jobs };
     } else {
-      result = await controller.scrapePlain({ baseUrl: args.url || DEFAULT_LIST_URL, page: args.page, limit: args.limit });
+      result = await controller.scrapePlain({ baseUrl: args.url || DEFAULT_LIST_URL, page: args.page, limit: args.limit, withDetails: args.withDetails });
     }
 
     await writeOutput(args.output, result);

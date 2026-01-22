@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+const JobDetailSectionSchema = z.object({
+  title: z.string(),
+  content: z.string()
+});
+
 export const JobSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -17,10 +22,15 @@ export const JobSchema = z.object({
   description: z.string().optional(),
   companyLogo: z.string().url().optional(),
   source: z.string().url(),
-  scrapedAt: z.string()
+  scrapedAt: z.string(),
+  applyUrl: z.string().url().optional(),
+  detailHtml: z.string().optional(),
+  detailText: z.string().optional(),
+  detailSections: z.array(JobDetailSectionSchema).optional()
 });
 
 export type JobProps = z.infer<typeof JobSchema>;
+export type JobDetailSection = z.infer<typeof JobDetailSectionSchema>;
 
 export class JobPosting {
   private constructor(private readonly props: JobProps) {}
@@ -96,6 +106,22 @@ export class JobPosting {
 
   get scrapedAt() {
     return this.props.scrapedAt;
+  }
+
+  get applyUrl() {
+    return this.props.applyUrl;
+  }
+
+  get detailHtml() {
+    return this.props.detailHtml;
+  }
+
+  get detailText() {
+    return this.props.detailText;
+  }
+
+  get detailSections() {
+    return this.props.detailSections ? [...this.props.detailSections] : undefined;
   }
 
   toPlainObject(): JobProps {

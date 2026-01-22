@@ -1,7 +1,7 @@
 import got from 'got';
 import * as cheerio from 'cheerio';
 import type { Cheerio, CheerioAPI } from 'cheerio';
-import { JobPosting } from '../models/job-posting.js';
+import { JobPosting, type JobDetailSection } from '../models/job-posting.js';
 
 export const DEFAULT_LIST_URL = 'https://www.getonbrd.cl/jobs/programacion';
 
@@ -9,12 +9,14 @@ export interface ParseJobsOptions {
   origin?: string;
   limit?: number;
   sourceUrl?: string;
+  withDetails?: boolean;
 }
 
 export interface ScrapeOptions {
   baseUrl?: string;
   page?: number;
   limit?: number;
+  withDetails?: boolean;
 }
 
 export interface ScrapeResult<T> {
@@ -56,6 +58,8 @@ const extractModality = (locationText?: string): { location?: string; modality?:
     modality: modalityMatch ? normalizeText(modalityMatch[1]) : undefined
   };
 };
+
+const headingTags = new Set(['h2', 'h3', 'h4']);
 
 export class JobScraperService {
   parseFromHtml(html: string, { origin = new URL(DEFAULT_LIST_URL).origin, limit, sourceUrl = DEFAULT_LIST_URL }: ParseJobsOptions = {}): JobPosting[] {
@@ -131,7 +135,7 @@ export class JobScraperService {
     return limit ? jobs.slice(0, limit) : jobs;
   }
 
-  async scrapeProgrammingJobs({ baseUrl = DEFAULT_LIST_URL, page = 1, limit }: ScrapeOptions = {}): Promise<ScrapeResult<JobPosting>> {
+  async scrapeProgrammingJobs({ baseUrl = DEFAULT_LIST_URL, page = 1, limit, withDetails = false }: ScrapeOptions = {}): Promise<ScrapeResult<JobPosting>> {
     const url = new URL(baseUrl);
     if (page && page > 1) {
       url.searchParams.set('page', String(page));
@@ -139,7 +143,8 @@ export class JobScraperService {
 
     const html = await got(url.toString(), { headers: DEFAULT_HEADERS }).text();
     const origin = `${url.protocol}//${url.host}`;
-    const jobs = this.parseFromHtml(html, { origin, limit, sourceUrl: url.toString() });
+    const parsedJobs = this.parseFromHtml(html, { origin, limit, sourceUrl: url.toString() });
+    const jobs = await this.attachJobDetails(parsedJobs, withDetails);
 
     return {
       source: url.toString(),
@@ -147,5 +152,77 @@ export class JobScraperService {
       total: jobs.length,
       jobs
     };
+  }
+
+  async attachJobDetails(jobs: JobPosting[], withDetails: boolean): Promise<JobPosting[]> {
+    if (!withDetails) {
+      return jobs;
+    }
+
+    const enriched: JobPosting[] = [];
+    for (const job of jobs) {
+      try {
+        const detailed = await this.fetchJobDetail(job);
+        enriched.push(detailed);
+      } catch (error) {
+        enriched.push(job);
+      }
+    }
+
+    return enriched;
+  }
+
+  private async fetchJobDetail(job: JobPosting): Promise<JobPosting> {
+    const html = await got(job.link, { headers: DEFAULT_HEADERS }).text();
+    const details = this.parseJobDetailHtml(html, job.link);
+    if (!details) return job;
+
+    return JobPosting.create({
+      ...job.toPlainObject(),
+      ...details
+    });
+  }
+
+  private parseJobDetailHtml(html: string, jobUrl: string) {
+    const $ = cheerio.load(html);
+    const jobBody = $('#job-body');
+    if (!jobBody.length) return undefined;
+
+    const detailHtml = jobBody.html()?.trim();
+    const detailText = normalizeText(jobBody.text());
+    const detailSections = this.extractDetailSections($, jobBody);
+    const applyAnchor = $('#apply_bottom, a.js-go-to-apply').first();
+    const applyUrl = toAbsoluteUrl(applyAnchor.attr('href'), new URL(jobUrl).origin);
+
+    return {
+      detailHtml,
+      detailText,
+      detailSections,
+      applyUrl
+    };
+  }
+
+  private extractDetailSections($: CheerioAPI, container: Cheerio<any>): JobDetailSection[] | undefined {
+    const sections: JobDetailSection[] = [];
+    container.find('h2, h3, h4').each((_, heading) => {
+      const title = normalizeText($(heading).text());
+      if (!title) return;
+
+      const contentParts: string[] = [];
+      let node = $(heading).next();
+      while (node.length) {
+        const tagName = node.get(0)?.tagName?.toLowerCase();
+        if (tagName && headingTags.has(tagName)) break;
+        const text = normalizeText(node.text());
+        if (text) contentParts.push(text);
+        node = node.next();
+      }
+
+      if (contentParts.length) {
+        sections.push({ title, content: contentParts.join('\n') });
+      }
+    });
+
+    return sections.length ? sections : undefined;
   }
 }

@@ -18,11 +18,14 @@ export class JobController {
     };
   }
 
-  parseOfflineHtml(html: string, options: ParseJobsOptions = {}): JobPosting[] {
-    return this.scraperService.parseFromHtml(html, options);
+  async parseOfflineHtml(html: string, options: ParseJobsOptions = {}): Promise<JobPosting[]> {
+    const { withDetails, ...parseOptions } = options;
+    const jobs = this.scraperService.parseFromHtml(html, parseOptions);
+    return this.scraperService.attachJobDetails(jobs, Boolean(withDetails));
   }
 
-  parseOfflinePlain(html: string, options: ParseJobsOptions = {}): JobProps[] {
-    return this.parseOfflineHtml(html, options).map((job) => job.toPlainObject());
+  async parseOfflinePlain(html: string, options: ParseJobsOptions = {}): Promise<JobProps[]> {
+    const jobs = await this.parseOfflineHtml(html, options);
+    return jobs.map((job) => job.toPlainObject());
   }
 }
